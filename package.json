@@ -1,0 +1,19 @@
+{
+  "name": "streaming-chat",
+  "version": "1.0.0",
+  "description": "Streaming Chat — NestJS + Next.js + SSE",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run dev --prefix api\" \"npm run dev --prefix web\"",
+    "build": "npm run build --prefix api && npm run build --prefix web",
+    "test": "npm run test --prefix api && npm run test --prefix web",
+    "test:coverage": "npm run test:coverage --prefix api && npm run test:coverage --prefix web",
+    "lint": "npm run lint --prefix api && npm run lint --prefix web",
+    "format": "npm run format --prefix api && npm run format --prefix web",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
