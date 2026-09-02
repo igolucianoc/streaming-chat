@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Estratégia de desenvolvimento no .kiro/</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --fg: #1f2328;
+      --muted: #656d76;
+      --border: #d0d7de;
+      --accent: #0969da;
+      --code-bg: #f6f8fa;
+      --quote-border: #d0d7de;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: var(--fg);
+      background: var(--bg);
+    }
+    main {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 48px 24px 80px;
+    }
+    h1 {
+      font-size: 2rem;
+      line-height: 1.25;
+      padding-bottom: .3em;
+      border-bottom: 1px solid var(--border);
+    }
+    h2 {
+      font-size: 1.4rem;
+      margin-top: 2.2em;
+      padding-bottom: .3em;
+      border-bottom: 1px solid var(--border);
+    }
+    p { margin: 1em 0; }
+    ul, ol { padding-left: 1.6em; }
+    li { margin: .3em 0; }
+    code {
+      background: var(--code-bg);
+      padding: .15em .4em;
+      border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: .88em;
+    }
+    strong { font-weight: 600; }
+    blockquote {
+      margin: 1.2em 0;
+      padding: .2em 1em;
+      color: var(--muted);
+      border-left: .25em solid var(--quote-border);
+      background: var(--code-bg);
+      border-radius: 0 6px 6px 0;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117;
+        --fg: #e6edf3;
+        --muted: #9198a1;
+        --border: #30363d;
+        --accent: #4493f8;
+        --code-bg: #161b22;
+        --quote-border: #30363d;
+      }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Estratégia de desenvolvimento no <code>.kiro/</code></h1>
+
+  <h2>1. Estrutura do <code>.kiro/</code></h2>
+  <ul>
+    <li><code>steering/</code> — regras de comportamento do agente:
+      <ul>
+        <li><code>core.md</code> e <code>router.md</code> são os <strong>únicos arquivos sempre ativos</strong> (<code>inclusion: always</code>), curtos e sem duplicar o conteúdo dos workflows.</li>
+        <li><code>steering/comandos/</code> — os 9 workflows carregados sob demanda: <code>spec</code>, <code>planning</code>, <code>build</code>, <code>test</code>, <code>constraints</code>, <code>review</code>, <code>code-simplify</code>, <code>webperf</code>, <code>ship</code>.</li>
+      </ul>
+    </li>
+    <li><code>skills/</code> — 25 skills ativadas por relevância (descrição é o principal sinal de descoberta).</li>
+    <li><code>agents/</code> — 4 sub-agents especialistas: <code>code-reviewer</code>, <code>security-auditor</code>, <code>test-engineer</code>, <code>web-performance-auditor</code>.</li>
+    <li><code>references/</code> — checklists e padrões reutilizáveis, carregados só quando uma skill precisa: <code>definition-of-done</code>, <code>testing-patterns</code>, <code>security-checklist</code>, <code>performance-checklist</code>, <code>accessibility-checklist</code>, <code>observability-checklist</code>, <code>orchestration-patterns</code>.</li>
+    <li><code>README-TOKEN-OPTIMIZATION.md</code> — descreve as mudanças da v2 e como fazer o teste A/B de consumo de tokens.</li>
+  </ul>
+
+  <h2>2. Política central (<code>core.md</code>, sempre ativo)</h2>
+  <p>Objetivo: entregar a tarefa com o <strong>menor contexto e número de operações</strong> necessários, sem sacrificar correção.</p>
+  <ul>
+    <li><strong>Contexto:</strong> ler só o necessário, preferir trechos/ranges a arquivos inteiros, não carregar referências/workflows/skills não relacionados, não repetir investigação já concluída.</li>
+    <li><strong>Execução:</strong> seguir o workflow mais específico, usar a skill mais específica sem empilhar skills, tratar causa raiz e manter o escopo solicitado.</li>
+    <li><strong>Qualidade:</strong> não assumir requisitos ambíguos (registrar a dúvida antes de implementar), verificar apenas o necessário, <strong>não fazer commit sem solicitação explícita</strong>.</li>
+  </ul>
+
+  <h2>3. Roteador de workflows (<code>router.md</code>, sempre ativo)</h2>
+  <p>A intenção escrita no chat é mapeada para um workflow, carregando <strong>somente</strong> o comando correspondente:</p>
+  <ul>
+    <li>Definir o que construir → <code>spec</code></li>
+    <li>Quebrar em tarefas → <code>planning</code></li>
+    <li>Implementar → <code>build</code></li>
+    <li>Testar / corrigir bug → <code>test</code></li>
+    <li>Definir a barra de qualidade → <code>constraints</code></li>
+    <li>Revisar antes do merge → <code>review</code></li>
+    <li>Simplificar / refatorar sem mudar comportamento → <code>code-simplify</code></li>
+    <li>Auditar performance web → <code>webperf</code></li>
+    <li>Pré-lançamento (decisão go/no-go) → <code>ship</code></li>
+  </ul>
+  <p>Regras do roteador: não carregar comandos não relacionados; skills são ativadas por relevância (não forçar skills extras); auditorias especializadas podem usar os sub-agents; não delegar tarefa pequena só por regra; carregar um segundo workflow só quando for necessário.</p>
+
+  <h2>4. Fluxo Spec → Plan → Build → Verify → Review → Ship</h2>
+  <ul>
+    <li><strong>Spec:</strong> gera um <code>SPEC.md</code> com objetivo, comandos, estrutura do projeto, estilo de código, estratégia de testes e fronteiras.</li>
+    <li><strong>Planning:</strong> modo somente leitura, fatiamento <strong>vertical</strong> (um caminho completo por tarefa, não camadas horizontais), com critérios de aceitação e passos de verificação → salva em <code>tasks/plan.md</code> e <code>tasks/todo.md</code>.</li>
+    <li><strong>Build:</strong> implementação incremental, uma fatia por vez. Existe o modo <code>build auto</code> que roda o plano inteiro com <strong>uma única aprovação</strong> humana (checkpoint único), sem parar entre tarefas.</li>
+  </ul>
+
+  <h2>5. TDD de verdade (RED → GREEN → refatora)</h2>
+  <p>Todo build segue o loop:</p>
+  <ol>
+    <li>Escreve teste que falha para o comportamento esperado (RED)</li>
+    <li>Implementa o código mínimo para passar (GREEN)</li>
+    <li>Roda a suíte de testes completa (checagem de regressão)</li>
+    <li>Roda o build para verificar a compilação</li>
+    <li>Faz commit com mensagem descritiva</li>
+    <li>Marca a tarefa como concluída e para</li>
+  </ol>
+  <p>Correção de bug segue o padrão <strong>Prove-It</strong>: escreve primeiro um teste que reproduz o bug (deve falhar), confirma a falha, implementa a correção e confirma que passa.</p>
+
+  <h2>6. Build &amp; qualidade</h2>
+  <ul>
+    <li>Cada tarefa só fecha com teste passando + build compilando + commit próprio.</li>
+    <li>Nada de <code>git add -A</code> cego: stage apenas dos arquivos que a tarefa tocou.</li>
+    <li><strong>Review em 5 eixos:</strong> correção, legibilidade, arquitetura, segurança e performance. Achados categorizados como Crítico, Importante ou Sugestão, com referências <code>arquivo:linha</code>.</li>
+    <li>O <code>ship</code> só dá <strong>GO</strong> com plano de rollback obrigatório.</li>
+  </ul>
+
+  <h2>7. Isolamento de contexto = economia de tokens</h2>
+  <p>Este é o pulo do gato:</p>
+  <ul>
+    <li>Exploração de código e leitura ampla pode ser <strong>delegada a sub-agents</strong> (<code>context-gatherer</code>, <code>general-task-execution</code>), devolvendo à sessão principal <strong>apenas o resultado final</strong>, nunca o contexto intermediário (arquivos lidos, buscas, tentativas).</li>
+    <li>Isso mantém o histórico da sessão principal enxuto e reduz o consumo de tokens.</li>
+    <li><strong>Sem obrigatoriedade cega:</strong> a política <em>não</em> exige sub-agent para toda implementação — para tarefas pequenas roda-se na própria sessão, evitando custo extra. Sub-agent entra quando realmente reduz o contexto (exploração ampla, tarefa independente ou auditoria especializada).</li>
+  </ul>
+  <p>As <strong>personas especialistas</strong> (<code>code-reviewer</code>, <code>security-auditor</code>, <code>test-engineer</code>, <code>web-performance-auditor</code>) rodam como sub-agents isolados. No <code>ship</code>, as três principais rodam <strong>em paralelo</strong> e a sessão principal apenas funde os relatórios em uma decisão go/no-go.</p>
+  <blockquote>Detalhe importante: sub-agents só funcionam em <strong>Autopilot mode</strong>. Em Supervised eles não rodam.</blockquote>
+</main>
+</body>
+</html>

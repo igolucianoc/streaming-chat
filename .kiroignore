@@ -1,0 +1,35 @@
+# Dependências
+node_modules/
+.pnpm-store/
+
+# Build
+dist/
+build/
+.next/
+.nuxt/
+coverage/
+
+# Docker
+.docker/
+
+# Arquivos de ambiente
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Arquivos temporários
+.tmp/
+temp/
+tmp/
+
+# Dados
+uploads/
+storage/
+backups/
+
+# IDE
+.vscode/
+.idea/
