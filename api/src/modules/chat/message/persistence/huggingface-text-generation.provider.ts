@@ -1,23 +1,16 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HfInference } from '@huggingface/inference';
-
-export interface StreamChunk {
-  token: string;
-  done: boolean;
-}
-
-export interface HuggingFaceClientConfig {
-  token: string;
-  model: string;
-}
+import { ITextGenerationProvider } from '../domain';
 
 /**
- * Encapsula a comunicação com a API do Hugging Face.
- * Responsável exclusivamente por produzir um AsyncGenerator de chunks de texto.
+ * Implementação de ITextGenerationProvider baseada na API do Hugging Face.
+ *
+ * Responsável exclusivamente por produzir um AsyncGenerator de tokens de texto.
+ * Vive na camada de persistence/infra: encapsula o acesso ao recurso externo.
  */
 @Injectable()
-export class HuggingFaceClient {
-  private readonly logger = new Logger(HuggingFaceClient.name);
+export class HuggingFaceTextGenerationProvider implements ITextGenerationProvider {
+  private readonly logger = new Logger(HuggingFaceTextGenerationProvider.name);
   private readonly client: HfInference;
   private readonly model: string;
 

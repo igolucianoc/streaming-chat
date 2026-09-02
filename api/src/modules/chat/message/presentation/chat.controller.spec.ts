@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
-import { ChatController } from './chat.controller';
-import { ChatService } from '../application/chat.service';
 import { of, Subject } from 'rxjs';
-import type { SseEvent } from '../application/chat.service';
+import { ChatController } from './chat.controller';
+import { StreamMessageUseCase } from '../application';
+import { ZodValidationPipe } from '../../../../infra/http/zod-validation.pipe';
+import { chatSchema } from './schemas/chat.schema';
+import type { SseEvent } from '../../../../core';
 
 // Mock mínimo do objeto Response do Express
 function makeMockResponse(): {
@@ -24,23 +26,23 @@ function makeMockResponse(): {
 
 describe('ChatController', () => {
   let controller: ChatController;
-  let chatService: ChatService;
+  let useCase: StreamMessageUseCase;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ChatController],
       providers: [
         {
-          provide: ChatService,
+          provide: StreamMessageUseCase,
           useValue: {
-            streamMessage: vi.fn(),
+            execute: vi.fn(),
           },
         },
       ],
     }).compile();
 
     controller = module.get<ChatController>(ChatController);
-    chatService = module.get<ChatService>(ChatService);
+    useCase = module.get<StreamMessageUseCase>(StreamMessageUseCase);
   });
 
   describe('GET /health', () => {
@@ -49,29 +51,32 @@ describe('ChatController', () => {
     });
   });
 
+  // A validação de entrada agora vive no ZodValidationPipe transversal.
+  // O contrato observável (HTTP 400 + primeira mensagem do schema) é o mesmo.
+  describe('validação de entrada (ZodValidationPipe)', () => {
+    const pipe = new ZodValidationPipe(chatSchema);
+
+    it('rejeita mensagem vazia com a mensagem do schema', () => {
+      expect(() => pipe.transform({ message: '' })).toThrow('A mensagem não pode ser vazia.');
+    });
+
+    it('rejeita mensagem somente com espaços', () => {
+      expect(() => pipe.transform({ message: '   ' })).toThrow('A mensagem não pode ser vazia.');
+    });
+
+    it('rejeita body sem campo message', () => {
+      expect(() => pipe.transform({})).toThrow();
+    });
+
+    it('aceita e normaliza (trim) mensagem válida', () => {
+      expect(pipe.transform({ message: '  Olá  ' })).toEqual({ message: 'Olá' });
+    });
+  });
+
   describe('POST /chat', () => {
-    it('lança BadRequestException para mensagem vazia', async () => {
-      const res = makeMockResponse();
-      await expect(controller.chat({ message: '' }, res as never)).rejects.toThrow(
-        'A mensagem não pode ser vazia.',
-      );
-    });
-
-    it('lança BadRequestException para mensagem somente com espaços', async () => {
-      const res = makeMockResponse();
-      await expect(controller.chat({ message: '   ' }, res as never)).rejects.toThrow(
-        'A mensagem não pode ser vazia.',
-      );
-    });
-
-    it('lança BadRequestException quando body não tem campo message', async () => {
-      const res = makeMockResponse();
-      await expect(controller.chat({}, res as never)).rejects.toThrow();
-    });
-
     it('configura headers SSE corretamente para requisição válida', async () => {
       const res = makeMockResponse();
-      vi.mocked(chatService.streamMessage).mockReturnValue(of({ type: 'done' }));
+      vi.mocked(useCase.execute).mockReturnValue(of({ type: 'done' }));
 
       await controller.chat({ message: 'Olá' }, res as never);
 
@@ -84,7 +89,7 @@ describe('ChatController', () => {
     it('escreve eventos SSE no formato correto', async () => {
       const res = makeMockResponse();
       const events: SseEvent[] = [{ type: 'chunk', content: 'Olá' }, { type: 'done' }];
-      vi.mocked(chatService.streamMessage).mockReturnValue(of(...events));
+      vi.mocked(useCase.execute).mockReturnValue(of(...events));
 
       await controller.chat({ message: 'Olá' }, res as never);
 
@@ -96,7 +101,7 @@ describe('ChatController', () => {
 
     it('encerra a resposta ao completar o stream', async () => {
       const res = makeMockResponse();
-      vi.mocked(chatService.streamMessage).mockReturnValue(of({ type: 'done' }));
+      vi.mocked(useCase.execute).mockReturnValue(of({ type: 'done' }));
 
       await controller.chat({ message: 'Olá' }, res as never);
 
@@ -106,7 +111,7 @@ describe('ChatController', () => {
     it('registra o evento close para cancelar o stream quando cliente desconecta', async () => {
       const res = makeMockResponse();
       const subject = new Subject<SseEvent>();
-      vi.mocked(chatService.streamMessage).mockReturnValue(subject.asObservable());
+      vi.mocked(useCase.execute).mockReturnValue(subject.asObservable());
 
       // Não await — o stream fica pendente
       void controller.chat({ message: 'Olá' }, res as never);
@@ -117,16 +122,13 @@ describe('ChatController', () => {
       expect(res.on).toHaveBeenCalledWith('close', expect.any(Function));
     });
 
-    it('passa a mensagem correta para o ChatService', async () => {
+    it('passa a mensagem correta para o use case', async () => {
       const res = makeMockResponse();
-      vi.mocked(chatService.streamMessage).mockReturnValue(of({ type: 'done' }));
+      vi.mocked(useCase.execute).mockReturnValue(of({ type: 'done' }));
 
       await controller.chat({ message: 'Explique RAG' }, res as never);
 
-      expect(chatService.streamMessage).toHaveBeenCalledWith(
-        'Explique RAG',
-        expect.any(AbortSignal),
-      );
+      expect(useCase.execute).toHaveBeenCalledWith('Explique RAG', expect.any(AbortSignal));
     });
   });
 });

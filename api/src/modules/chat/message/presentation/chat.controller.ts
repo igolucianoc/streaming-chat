@@ -1,17 +1,10 @@
-import {
-  Controller,
-  Post,
-  Body,
-  Res,
-  HttpCode,
-  HttpStatus,
-  BadRequestException,
-  Logger,
-  Get,
-} from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Logger, Post, Res } from '@nestjs/common';
 import { Response } from 'express';
-import { ChatService, SseEvent } from '../application/chat.service';
-import { chatSchema } from '../schemas/chat.schema';
+import { SseEvent } from '../../../../core';
+import { ZodValidationPipe } from '../../../../infra/http/zod-validation.pipe';
+import { StreamMessageUseCase } from '../application';
+import { ChatInput, chatSchema } from './schemas/chat.schema';
+import { SsePresenter } from './sse.presenter';
 
 /**
  * Expõe o endpoint POST /chat que retorna uma resposta SSE.
@@ -20,12 +13,15 @@ import { chatSchema } from '../schemas/chat.schema';
  * mecanismo não permite usar POST com body. Por isso gerenciamos o SSE
  * manualmente via Response do Express, mantendo total controle sobre o
  * protocolo e o ciclo de vida da conexão.
+ *
+ * A validação de entrada é feita pelo ZodValidationPipe transversal, que
+ * lança BadRequestException (HTTP 400) com a primeira mensagem do schema.
  */
 @Controller()
 export class ChatController {
   private readonly logger = new Logger(ChatController.name);
 
-  constructor(private readonly chatService: ChatService) {}
+  constructor(private readonly streamMessageUseCase: StreamMessageUseCase) {}
 
   @Get('health')
   @HttpCode(HttpStatus.OK)
@@ -35,15 +31,11 @@ export class ChatController {
 
   @Post('chat')
   @HttpCode(HttpStatus.OK)
-  async chat(@Body() body: unknown, @Res() res: Response): Promise<void> {
-    // Valida a entrada com Zod
-    const parsed = chatSchema.safeParse(body);
-    if (!parsed.success) {
-      const message = parsed.error.issues[0]?.message ?? 'Requisição inválida.';
-      throw new BadRequestException(message);
-    }
-
-    const { message } = parsed.data;
+  async chat(
+    @Body(new ZodValidationPipe(chatSchema)) body: ChatInput,
+    @Res() res: Response,
+  ): Promise<void> {
+    const { message } = body;
 
     // Configura os headers SSE antes de iniciar o stream
     res.setHeader('Content-Type', 'text/event-stream');
@@ -60,11 +52,11 @@ export class ChatController {
       controller.abort();
     });
 
-    const stream = this.chatService.streamMessage(message, controller.signal);
+    const stream = this.streamMessageUseCase.execute(message, controller.signal);
 
     stream.subscribe({
       next: (event: SseEvent) => {
-        this.sendSseEvent(res, event);
+        res.write(SsePresenter.format(event));
       },
       error: (err: unknown) => {
         this.logger.error('Erro no Observable do stream:', err);
@@ -74,10 +66,5 @@ export class ChatController {
         res.end();
       },
     });
-  }
-
-  private sendSseEvent(res: Response, event: SseEvent): void {
-    const data = JSON.stringify(event);
-    res.write(`data: ${data}\n\n`);
   }
 }
